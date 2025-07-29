@@ -1,11 +1,9 @@
-# 🌍 SMART CITY DASHBOARD v2.0
-# Real OpenWeatherMap API • Animated Trends • Smart Alerts
-# Deployable on Streamlit Cloud
+# 🌍 SMART CITY DASHBOARD v2.1
+# Real API • Animated Trends • Multi-Page • No Errors
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import numpy as np
 import requests
 import folium
@@ -14,20 +12,19 @@ from datetime import datetime, timedelta
 import time
 
 # -------------------------------
-# 🔐 API KEY (Set in .streamlit/secrets.toml or directly here)
+# 🔐 API KEY (Use secrets.toml in production)
 # -------------------------------
-# For security, use st.secrets in production
 try:
     API_KEY = st.secrets["OPENWEATHER_API_KEY"]
 except:
     API_KEY = "b4f73b0c7123cf33a1a24cd995f6b88a"  # Replace with your key
 
 if not API_KEY or API_KEY == "your-api-key-here":
-    st.error("❌ OpenWeatherMap API key not set. Go to https://openweathermap.org/api to get one.")
+    st.error("❌ OpenWeatherMap API key not set. Get one at [https://openweathermap.org/api](https://openweathermap.org/api)")
     st.stop()
 
 # -------------------------------
-# 1. Global City List
+# 1. Global City List: (city, country, lat, lon)
 # -------------------------------
 CITIES = [
     ("New York", "USA", 40.7128, -74.0060),
@@ -48,9 +45,9 @@ CITIES = [
 # 2. Fetch Real Data from OpenWeatherMap
 # -------------------------------
 @st.cache_data(ttl=1800)  # Cache for 30 minutes
-def get_weather_air(city_name, lat, lon):
+def get_weather_air(city_name, country, lat, lon):
     try:
-        # Current weather
+        # Current Weather
         weather_url = "http://api.openweathermap.org/data/2.5/weather"
         weather_params = {
             "lat": lat,
@@ -64,7 +61,7 @@ def get_weather_air(city_name, lat, lon):
             return None
         weather_data = weather_resp.json()
 
-        # Air pollution
+        # Air Pollution
         air_url = "http://api.openweathermap.org/data/2.5/air_pollution"
         air_params = {
             "lat": lat,
@@ -97,7 +94,9 @@ def get_weather_air(city_name, lat, lon):
         st.warning(f"Error fetching data for {city_name}: {e}")
         return None
 
-# Load data
+# -------------------------------
+# 3. Load Data with Progress Bar
+# -------------------------------
 def load_data():
     data = []
     progress_bar = st.sidebar.progress(0)
@@ -105,18 +104,18 @@ def load_data():
 
     for i, (name, country, lat, lon) in enumerate(CITIES):
         status_text.text(f"📡 Loading {name}...")
-        result = get_weather_air(name, lat, lon)
+        result = get_weather_air(name, country, lat, lon)
         if result:
             data.append(result)
         progress_bar.progress((i + 1) / len(CITIES))
-        time.sleep(0.1)  # Avoid rate limits
+        time.sleep(0.1)  # Avoid rate limiting
 
     progress_bar.empty()
     status_text.empty()
     return pd.DataFrame(data)
 
 # -------------------------------
-# 3. Generate Simulated Historical Data for Animation
+# 4. Simulate Historical Data for Animation
 # -------------------------------
 def generate_history(pm25_current):
     base = pm25_current
@@ -127,9 +126,9 @@ def generate_history(pm25_current):
     return pd.DataFrame({"date": dates, "pm2_5": values})
 
 # -------------------------------
-# 4. Streamlit UI
+# 5. Streamlit App UI
 # -------------------------------
-st.set_page_config(layout="wide", page_title="🌍 Smart City AI Dashboard", page_icon="🌆")
+st.set_page_config(layout="wide", page_title="🌍 Smart City Dashboard", page_icon="🌆")
 
 st.sidebar.title("🌆 Smart City Dashboard")
 page = st.sidebar.radio("🧭 Navigate", ["🌍 Live Overview", "📈 Animated Trends", "🔮 Forecast & Alerts", "📊 AI Insights"])
@@ -138,14 +137,14 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
-# Load data
+# Load real data
 df = load_data()
 
 if df.empty:
-    st.error("No data loaded. Check your API key or internet connection.")
+    st.error("❌ No data loaded. Check your API key or internet connection.")
     st.stop()
 
-# Risk Scoring
+# Calculate Risk Score
 df["risk_score"] = (df["pm2_5"] / 150 * 0.5 + df["aqi"] / 5 * 0.5) * 100
 bins = [0, 30, 60, 80, 100]
 labels = ["Low", "Medium", "High", "Critical"]
@@ -188,15 +187,19 @@ if page == "🌍 Live Overview":
 # Page 2: Animated Trends
 # -------------------------------
 elif page == "📈 Animated Trends":
-    st.title("📈 Animated PM2.5 Trends (Simulated History)")
+    st.title("📈 Simulated PM2.5 Trends Over Time")
 
-    city = st.selectbox("Select City", df["city"])
+    city = st.selectbox("🏙️ Select City", df["city"])
     row = df[df["city"] == city].iloc[0]
     hist_df = generate_history(row["pm2_5"])
     hist_df["city"] = city
 
     fig = px.scatter(
-        hist_df, x="date", y="pm2_5", size="pm2_5", text="city",
+        hist_df,
+        x="date",
+        y="pm2_5",
+        size="pm2_5",
+        text="city",
         animation_frame=hist_df["date"].dt.strftime("%b %d, %H:%M"),
         range_y=[0, 150],
         title=f"Simulated PM2.5 Trend in {city}",
@@ -214,10 +217,10 @@ elif page == "🔮 Forecast & Alerts":
     high_risk = df[df["risk_level"] == "Critical"]
     if not high_risk.empty:
         for _, r in high_risk.iterrows():
-            st.error(f"🚨 CRITICAL AIR QUALITY in {r['city']} ({r['pm2_5']} μg/m³) – Take action now!")
+            st.error(f"🚨 CRITICAL AIR QUALITY in {r['city']} ({r['pm2_5']} μg/m³) – Issue health advisory!")
 
     st.subheader("Predicted Global PM2.5")
-    trend = st.radio("Expected Trend", ["Improving", "Stable", "Worsening"])
+    trend = st.radio("Expected Pollution Trend", ["Improving", "Stable", "Worsening"])
     factor = {"Improving": 0.8, "Stable": 1.0, "Worsening": 1.3}
     predicted = df["pm2_5"].mean() * factor
 
@@ -230,23 +233,23 @@ elif page == "📊 AI Insights":
     st.title("🧠 AI-Powered Insights")
 
     avg_pm25 = df["pm2_5"].mean()
-    critical_cities = ", ".join(df[df["risk_level"] == "Critical"]["city"].tolist())
+    critical_list = df[df["risk_level"] == "Critical"]["city"].tolist()
 
     if avg_pm25 > 75:
-        st.warning("⚠️ **Air quality is unhealthy globally.** Recommend reducing emissions.")
+        st.warning("⚠️ **Air quality is unhealthy globally.** Recommend reducing emissions and traffic.")
     elif avg_pm25 > 35:
-        st.info("ℹ️ Moderate pollution. Sensitive groups should monitor levels.")
+        st.info("ℹ️ Pollution is moderate. Sensitive groups should take precautions.")
     else:
         st.success("✅ Air quality is good across most cities.")
 
-    if critical_cities:
-        st.error(f"🔴 Critical levels in: {critical_cities}")
+    if critical_list:
+        st.error(f"🔴 Critical levels in: {', '.join(critical_list)}")
 
     st.markdown("### 💡 Recommendations")
     st.write("""
-    - 🚗 Limit traffic in high-risk cities.
-    - 🌳 Expand green spaces.
-    - 📢 Issue public health advisories.
+    - 🚗 Implement congestion pricing in high-risk cities.
+    - 🌳 Increase urban green cover.
+    - 📢 Issue public alerts via SMS or apps.
     """)
 
 # -------------------------------
@@ -254,7 +257,7 @@ elif page == "📊 AI Insights":
 # -------------------------------
 st.markdown("---")
 st.markdown(
-    "🔐 API: [OpenWeatherMap](https://openweathermap.org/api) | "
+    "🔐 Data: [OpenWeatherMap](https://openweathermap.org/api) | "
     "🌐 Real-time Urban Intelligence | "
-    "🚀 Deployed with [Streamlit](https://streamlit.io)"
+    "🚀 Built with [Streamlit](https://streamlit.io)"
 )
