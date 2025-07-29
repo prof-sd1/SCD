@@ -1,92 +1,104 @@
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import numpy as np
+import plotly.express as px
 import folium
 from streamlit_folium import st_folium
 
-# -------------------------------
-# Mock Data (In real app, load from API or CSV)
-# -------------------------------
-CITIES = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
+st.set_page_config(page_title="Smart City Dashboard", layout="wide")
 
-df_air = pd.DataFrame({
-    "city": CITIES,
-    "aqi": np.random.randint(1, 6, 5),
-    "pm2_5": np.random.uniform(5, 100, 5),
-    "pm10": np.random.uniform(10, 150, 5),
-    "no2": np.random.uniform(10, 80, 5)
-})
+st.title("ðﾟﾌﾍ Smart City Dashboard")
+st.markdown("Analyze traffic flow, air quality, and energy consumption interactively.")
 
-df_traffic = pd.DataFrame({
-    "city": CITIES,
-    "congestion_level": np.random.uniform(0.3, 0.9, 5),
-    "avg_speed_kmh": np.random.uniform(20, 60, 5)
-})
+# Sample data loaders
+@st.cache_data
+def load_traffic_data():
+    return pd.DataFrame({
+        "timestamp": pd.date_range("2025-01-01", periods=100, freq="H"),
+        "road_id": np.random.choice(["A1", "B2", "C3"], 100),
+        "vehicle_count": np.random.poisson(20, size=100),
+        "avg_speed_kph": np.random.normal(45, 5, size=100),
+        "lat": np.random.uniform(9.00, 9.10, 100),
+        "lon": np.random.uniform(38.70, 38.80, 100)
+    })
 
-df_summary = df_air[["city", "aqi", "pm2_5"]].merge(df_traffic[["city", "congestion_level"]], on="city")
-df_summary["risk_score"] = (df_summary["aqi"] * 0.4 + df_summary["congestion_level"] * 0.6) * 20
-df_summary["risk_level"] = pd.cut(df_summary["risk_score"], bins=3, labels=["Low", "Medium", "High"])
+@st.cache_data
+def load_air_quality_data():
+    return pd.DataFrame({
+        "date": pd.date_range("2025-01-01", periods=100),
+        "location": np.random.choice(["Site A", "Site B", "Site C"], 100),
+        "pm25": np.random.uniform(10, 70, 100),
+        "no2": np.random.uniform(5, 30, 100),
+        "o3": np.random.uniform(15, 40, 100)
+    })
 
-# -------------------------------
-# Streamlit App
-# -------------------------------
-st.set_page_config(layout="wide", page_title="🏙️ Smart City Dashboard")
+@st.cache_data
+def load_energy_data():
+    return pd.DataFrame({
+        "date": pd.date_range("2025-01-01", periods=100),
+        "district": np.random.choice(["North", "South", "East", "West"], 100),
+        "energy_kwh": np.random.uniform(1000, 5000, 100)
+    })
 
-st.title("🏙️ Smart City Dashboard")
-st.markdown("Real-time urban analytics for smarter cities")
+# Tabs for different domains
+tab1, tab2, tab3 = st.tabs(["ðﾟﾚﾦ Traffic", "ðﾟﾌﾫ️ Air Quality", "⚡ Energy"])
 
-# Sidebar Filters
-st.sidebar.header("Filters")
-selected_cities = st.sidebar.multiselect("Select Cities", CITIES, default=CITIES)
+# ------------------ Traffic Tab ------------------ #
+with tab1:
+    st.header("ðﾟﾚﾦ Traffic Monitoring")
 
-df_filtered = df_summary[df_summary.city.isin(selected_cities)]
+    df = load_traffic_data()
+    selected_road = st.selectbox("Select Road ID", df['road_id'].unique())
+    filtered_df = df[df['road_id'] == selected_road]
 
-# Metrics
-st.header("📊 Key Metrics")
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Avg Air Quality Index", f"{df_filtered['aqi'].mean():.1f}")
-col2.metric("Avg Congestion Level", f"{df_filtered['congestion_level'].mean():.2f}")
-col3.metric("Avg PM2.5", f"{df_filtered['pm2_5'].mean():.1f} μg/m³")
-col4.metric("High Risk Cities", (df_filtered["risk_level"] == "High").sum())
+    col1, col2 = st.columns(2)
+    col1.metric("Total Vehicles", int(filtered_df['vehicle_count'].sum()))
+    col2.metric("Avg Speed", f"{filtered_df['avg_speed_kph'].mean():.1f} km/h")
 
-# Map
-st.header("🌍 Risk Map")
-m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
-for _, row in df_filtered.iterrows():
-    color = {"Low": "green", "Medium": "orange", "High": "red"}[row["risk_level"]]
-    folium.CircleMarker(
-        location=[39 + np.random.rand(), -98 + np.random.rand()],
-        radius=10,
-        color=color,
-        fill=True,
-        fill_color=color,
-        popup=f"{row['city']}: {row['risk_level']} Risk"
-    ).add_to(m)
-st_folium(m, width=700)
+    st.subheader("Traffic Volume and Speed Over Time")
+    st.line_chart(filtered_df.set_index("timestamp")[["vehicle_count", "avg_speed_kph"]])
 
-# Charts
-st.header("📈 Analytics")
+    st.subheader("Traffic Map")
+    map = folium.Map(location=[9.05, 38.75], zoom_start=12)
+    for _, row in filtered_df.iterrows():
+        folium.CircleMarker(
+            location=[row['lat'], row['lon']],
+            radius=5,
+            popup=f"Road: {row['road_id']}\nVehicles: {row['vehicle_count']}",
+            color="blue",
+            fill=True,
+            fill_opacity=0.6
+        ).add_to(map)
+    st_folium(map, width=700)
 
-fig1 = px.bar(df_filtered, x='city', y='congestion_level', color='risk_level',
-              title="Traffic Congestion by City", color_discrete_map={"Low": "green", "Medium": "orange", "High": "red"})
-st.plotly_chart(fig1, use_container_width=True)
+# ------------------ Air Quality Tab ------------------ #
+with tab2:
+    st.header("ðﾟﾌﾫ️ Air Quality Monitoring")
 
-fig2 = px.scatter(df_filtered, x='pm2_5', y='congestion_level', text='city', size='aqi',
-                  title="Air Quality vs Traffic Congestion",
-                  labels={"pm2_5": "PM2.5 (μg/m³)", "congestion_level": "Congestion Level"})
-st.plotly_chart(fig2, use_container_width=True)
+    df = load_air_quality_data()
+    selected_location = st.selectbox("Select Monitoring Site", df['location'].unique())
+    filtered_df = df[df['location'] == selected_location]
 
-# Forecast
-st.header("🔮 Forecast: Predicted PM2.5")
-congestion_input = st.slider("Expected Avg Congestion Level", 0.0, 1.0, 0.5)
-health_input = st.slider("Expected Avg Respiratory Cases", 10, 100, 30)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Avg PM2.5", f"{filtered_df['pm25'].mean():.1f} µg/m³")
+    col2.metric("Avg NO₂", f"{filtered_df['no2'].mean():.1f} µg/m³")
+    col3.metric("Avg O₃", f"{filtered_df['o3'].mean():.1f} µg/m³")
 
-# Simple linear proxy (replace with real model in production)
-predicted_pm25 = 5 + 80 * congestion_input + 0.5 * health_input
-st.info(f"Predicted PM2.5 Level: **{predicted_pm25:.1f} μg/m³**")
+    st.subheader("Pollutant Levels Over Time")
+    fig = px.line(filtered_df, x="date", y=["pm25", "no2", "o3"], labels={"value": "Pollution (µg/m³)", "date": "Date"})
+    st.plotly_chart(fig, use_container_width=True)
 
-st.markdown("---")
-st.markdown("✅ Built with Python, Streamlit, and Plotly | Ready for **Streamlit Cloud** deployment")
+# ------------------ Energy Tab ------------------ #
+with tab3:
+    st.header("⚡ Energy Consumption")
+
+    df = load_energy_data()
+    selected_district = st.selectbox("Select District", df['district'].unique())
+    filtered_df = df[df['district'] == selected_district]
+
+    st.metric("Total Energy Used", f"{filtered_df['energy_kwh'].sum():,.0f} kWh")
+
+    st.subheader("Energy Usage Over Time")
+    fig = px.area(filtered_df, x="date", y="energy_kwh", labels={"energy_kwh": "Energy (kWh)", "date": "Date"})
+    st.plotly_chart(fig, use_container_width=True)
