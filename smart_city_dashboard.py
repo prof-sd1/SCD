@@ -6,30 +6,46 @@ import folium
 from streamlit_folium import st_folium
 
 # -------------------------------
-# Mock Data (Replace with APIs or CSVs in production)
+# Extended City List and Coordinates
 # -------------------------------
-CITIES = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
+CITIES = [
+    "New York, USA", "Los Angeles, USA", "Chicago, USA",
+    "Toronto, Canada", "Vancouver, Canada",
+    "London, UK", "Manchester, UK",
+    "Berlin, Germany", "Munich, Germany",
+    "Mumbai, India"
+]
 
 CITY_COORDS = {
-    "New York": [40.7128, -74.0060],
-    "Los Angeles": [34.0522, -118.2437],
-    "Chicago": [41.8781, -87.6298],
-    "Houston": [29.7604, -95.3698],
-    "Phoenix": [33.4484, -112.0740]
+    "New York, USA": [40.7128, -74.0060],
+    "Los Angeles, USA": [34.0522, -118.2437],
+    "Chicago, USA": [41.8781, -87.6298],
+    "Toronto, Canada": [43.651070, -79.347015],
+    "Vancouver, Canada": [49.2827, -123.1207],
+    "London, UK": [51.5074, -0.1278],
+    "Manchester, UK": [53.4808, -2.2426],
+    "Berlin, Germany": [52.5200, 13.4050],
+    "Munich, Germany": [48.1351, 11.5820],
+    "Mumbai, India": [19.0760, 72.8777]
 }
+
+# -------------------------------
+# Generate Mock Data
+# -------------------------------
+np.random.seed(42)  # For reproducibility
 
 df_air = pd.DataFrame({
     "city": CITIES,
-    "aqi": np.random.randint(1, 6, 5),
-    "pm2_5": np.random.uniform(5, 100, 5),
-    "pm10": np.random.uniform(10, 150, 5),
-    "no2": np.random.uniform(10, 80, 5)
+    "aqi": np.random.randint(1, 6, len(CITIES)),
+    "pm2_5": np.random.uniform(5, 100, len(CITIES)),
+    "pm10": np.random.uniform(10, 150, len(CITIES)),
+    "no2": np.random.uniform(10, 80, len(CITIES))
 })
 
 df_traffic = pd.DataFrame({
     "city": CITIES,
-    "congestion_level": np.random.uniform(0.3, 0.9, 5),
-    "avg_speed_kmh": np.random.uniform(20, 60, 5)
+    "congestion_level": np.random.uniform(0.3, 0.9, len(CITIES)),
+    "avg_speed_kmh": np.random.uniform(20, 60, len(CITIES))
 })
 
 df_summary = df_air[["city", "aqi", "pm2_5"]].merge(df_traffic[["city", "congestion_level"]], on="city")
@@ -60,7 +76,7 @@ col4.metric("High Risk Cities", int((df_filtered["risk_level"] == "High").sum())
 
 # Risk Map
 st.header("🗺️ Risk Map")
-m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
+m = folium.Map(location=[20, 0], zoom_start=2)  # Centered for global view
 for _, row in df_filtered.iterrows():
     coords = CITY_COORDS[row["city"]]
     color = {"Low": "green", "Medium": "orange", "High": "red"}[row["risk_level"]]
